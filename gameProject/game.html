@@ -1,0 +1,1354 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0,  minimum-scale=1.0, user-scalable=0" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+	<script src = "../libs/CanvasSketch.js"></script>
+	<script type = "text/javascript">
+    var layerTest;
+    window.addEventListener("load", eventWindowLoaded, true);
+	function eventWindowLoaded() {
+		canvasApp();
+	}
+	
+	function supportedAudioFormat(audio) {
+		var returnExtension = "";
+		if (audio.canPlayType("audio/ogg") =="probably" || audio.canPlayType("audio/ogg") == "maybe") {
+			returnExtension = "ogg";
+		} else if(audio.canPlayType("audio/wav") =="probably" || audio.canPlayType("audio/wav") == "maybe") {
+			returnExtension = "wav";
+		} else if(audio.canPlayType("audio/wav") == "probably" || audio.canPlayType("audio/wav") == "maybe") {
+			returnExtension = "mp3";
+		}
+		
+		return returnExtension;
+		
+	}
+
+	function canvasApp(){		
+		var width = document.clientWidth || self.innerWidth;
+		var height = document.clientHeight || self.innerHeight;
+		theCanvas = document.getElementById('canvas');
+		theCanvas.style.width = (width - 1) + "px";
+		theCanvas.style.height = (height - 1) + "px";
+		
+		layer = new Layer(theCanvas);
+		context = layer.renderer.canvas.getContext("2d");
+		layer.zoom = 200;
+
+		
+		//音效
+		var SOUND_EXPLODE =  "explode1";
+		var SOUND_SHOOT 	=  "shoot1";
+		var SOUND_SAUCER_SHOOT = "saucershoot"
+		var MAX_SOUNDS		= 9;
+		var soundPool = new Array();
+		var explodeSound;
+		var explodeSound2;
+		var explodeSound3;
+		var shootSound;
+		var shootSound2;
+		var shootSound3;
+		var saucershootSound;
+		var saucershootSound2;
+		var saucershootSound3;
+		var audioType;
+		
+		
+		//程序状态
+		var GAME_STATE_INIT=0;
+		var GAME_STATE_WAIT_FOR_LOAD=5;
+		var GAME_STATE_TITLE=10;
+		var GAME_STATE_NEW_GAME=20;
+		var GAME_STATE_NEW_LEVEL=30;
+		var GAME_STATE_PLAYER_START=40;
+		var GAME_STATE_PLAY_LEVEL=50;
+		var GAME_STATE_PLAYER_DIE=60;
+		var GAME_STATE_GAME_OVER=70;
+		var currentGameState=0;
+		var currentGameStateFunction=null;
+		
+		//游戏各种元素样式
+		var playerShipStyle = {fillColor:"#c04229", strokeColor:"black", 
+			fill:true, stroke:true, fillOpacity:1, strokeOpacity:1};
+		var trustStyle = {strokeColor:"red", fill:true, stroke:true, fillOpacity:1, strokeOpacity:1};
+		var playerMissileStyle = {fillColor:"red",fill:true, stroke:false, fillOpacity:1, 
+			strokeOpacity:1, pointRadius: 3};		
+		var saucerMissileStyle = {fillColor:"#b405ba",fill:true, stroke:false, fillOpacity:1, 
+			strokeOpacity:1, pointRadius: 5};		
+		var particleStyle = {fillColor:"#ffbc48",fill:true, stroke:false, fillOpacity:1, 
+			strokeOpacity:1, pointRadius: 2};
+		var rockBigStyle = {fillColor:"green", strokeColor:"black", 
+			fill:true, stroke:true, fillOpacity:1, strokeOpacity:1};
+		var rockMedStyle = {fillColor:"yellow", strokeColor:"black", 
+			fill:true, stroke:true, fillOpacity:1, strokeOpacity:1};
+		var rockSamStyle = {fillColor:"red", strokeColor:"black", 
+			fill:true, stroke:true, fillOpacity:1, strokeOpacity:1};
+		var saucerStyle = {fillColor:"#9bedbe", strokeColor:"black", 
+			fill:true, stroke:true, fillOpacity:1, strokeOpacity:1};
+		var imgStyle = {fill:true, stroke:true, fillOpacity:1, strokeOpacity:1};
+
+		
+		var titleStarted=false;
+		var gameOverStarted=false;
+
+		var score=0;
+		var level=0;
+		var extraShipAtEach=10000;
+		var extraShipsEarned=0;
+		var playerShips=3;
+		
+		var xMin=0;
+		var xMax=width;
+		var yMin=0;
+		var yMax=height;
+		
+		var bigRockScore=50;
+		var medRockScore=75;
+		var smlRockScore=100;
+		var saucerScore=300;
+			
+		var ROCK_SCALE_LARGE=1;
+		var ROCK_SCALE_MEDIUM=2;
+		var ROCK_SCALE_SMALL=3;
+		
+		//游戏所使用的类数组
+		var player={};
+		var rocks=[];
+		var saucers=[];
+		var playerMissiles=[];
+		var particles=[];
+		var saucerMissiles=[];
+		var particlePool=[];
+		var maxParticles=200;
+		var newPartcile;
+		var tempParticle;
+		var gameVectors;
+
+		var levelRockMaxSpeedAdjust=1;
+		var levelSaucerMax = 1; 
+		var levelSaucerOccurenceRate=25;
+		var levelSaucerSpeed=1;
+		var levelSaucerFireDelay=300;
+		var levelSaucerFireRate=30;
+		var levelSaucerMissileSpeed=1;
+		
+		var keyPressList=[];
+		var shipTiles;
+		var shipTiles2;
+		var saucerTiles;
+		var largeRockTiles;
+		var mediumRockTiles;
+		var smallRockTiles;
+		var particleTiles;
+
+		//为声音添加监控
+		function itemLoaded(event) {
+			loadCount++;
+			if (loadCount >= itemsToLoad) {
+				switchGameState(GAME_STATE_TITLE)
+			}
+		}
+		
+		function runGame(){
+			currentGameStateFunction();
+		}
+		
+		function switchGameState(newState) {
+			currentGameState=newState;
+			switch (currentGameState) {
+			
+				case GAME_STATE_INIT:
+					currentGameStateFunction=gameStateInit;
+					break;
+				case GAME_STATE_WAIT_FOR_LOAD:
+					currentGameStateFunction=gameStateWaitForLoad;
+					break;
+				case GAME_STATE_TITLE:
+					 currentGameStateFunction=gameStateTitle;
+					 break;
+				case GAME_STATE_NEW_GAME:
+					 currentGameStateFunction=gameStateNewGame;
+					 break;
+				case GAME_STATE_NEW_LEVEL:
+					 currentGameStateFunction=gameStateNewLevel;
+					 break;
+				case GAME_STATE_PLAYER_START:
+					 currentGameStateFunction=gameStatePlayerStart;
+					 break;
+				case GAME_STATE_PLAY_LEVEL:
+					 currentGameStateFunction=gameStatePlayLevel;
+					 break;
+				case GAME_STATE_PLAYER_DIE:
+					 currentGameStateFunction=gameStatePlayerDie;
+					 break;
+					
+				case GAME_STATE_GAME_OVER:
+					 currentGameStateFunction=gameStateGameOver;
+					 break;
+			}
+	   
+		}
+		
+		//读取等待
+		function gameStateWaitForLoad(){
+		}
+			
+		//初始化游戏的各种参数
+		function gameStateInit() {
+			createObjectPools();
+			
+			loadCount=0;
+			itemsToLoad = 8;
+			
+			
+			shipTiles = new Image();
+			shipTiles.src = "ship_tiles.png";
+			shipTiles.onload = itemLoaded;
+			
+			shipTiles2 = new Image();
+			shipTiles2.src = "ship_tiles2.png";
+			shipTiles2.onload = itemLoaded;
+			
+			saucerTiles= new Image();
+			saucerTiles.src = "saucer.png";
+			saucerTiles.onload = itemLoaded;
+			
+			largeRockTiles = new Image();
+			largeRockTiles.src = "largerocks.png";
+			largeRockTiles.onload = itemLoaded;
+			
+			mediumRockTiles = new Image();
+			mediumRockTiles.src = "mediumrocks.png";
+			mediumRockTiles.onload = itemLoaded;
+			
+			smallRockTiles = new Image();
+			smallRockTiles.src = "smallrocks.png";
+			smallRockTiles.onload = itemLoaded;
+			
+			particleTiles = new Image();
+			particleTiles.src = "parts.png";
+			particleTiles.onload = itemLoaded;
+			
+			bgImg = new Image();
+			bgImg.src = "space.jpg";
+			bgImg.onload = itemLoaded;
+			
+			switchGameState(GAME_STATE_WAIT_FOR_LOAD);
+		}
+		
+		function createObjectPools(){
+			for (var ctr=0;ctr<maxParticles;ctr++){
+				var newParticle={};
+				particlePool.push(newParticle)
+			}
+		}
+		
+		//创建游戏标题
+		function gameStateTitle() {
+			if (titleStarted !=true){
+				fillBackground();
+				setTextStyleTitle();
+				context.fillText  ("太空射击", xMax/2 - 30, yMax/3);
+				
+				setTextStyle();
+				context.fillText  ("点击 空格 以开始游戏", xMax/2 - 60, yMax/3+50);
+				
+				setTextStyleCredits();
+				context.fillText  ("基于Web矢量类库的HTML5游戏", xMax/2 - 60, yMax/3 + 100);
+				context.fillText  ("计科081 高超", xMax/2 - 30, yMax/3 + 150);
+				titleStarted=true;
+			}else{
+				if (keyPressList[32]==true){
+					switchGameState(GAME_STATE_NEW_GAME);
+					titleStarted=false;
+				}
+			}
+		}
+		
+		//开始新的游戏
+		function gameStateNewGame(){
+			level=0;
+			score=0;
+			playerShips=3;
+			player.maxVelocity=3;
+			player.width=32;
+			player.height=32;
+			player.halfWidth=16;
+			player.halfHeight=16;
+			player.hitWidth=24;
+			player.hitHeight=24;
+			player.rotationalVelocity=10;
+			player.thrustAcceleration=.15;
+			player.missileFrameDelay=1;
+			player.thrust=false;
+			player.alpha=1;
+			player.rotation=0;
+			player.x=0;
+			player.y=0;
+			
+			renderScoreBoard();
+			switchGameState(GAME_STATE_NEW_LEVEL);
+		}
+		
+		//新的level
+		function gameStateNewLevel(){
+			rocks=[];
+			saucers=[];
+			playerMissiles=[];
+			particles=[];
+			saucerMissiles=[];
+			level++;
+			//红色砖块的速度。
+			levelRockMaxSpeedAdjust=level*.25;
+			if (levelRockMaxSpeedAdjust > 3){
+				levelRockMaxSpeed=3;
+			}
+			//每次boss的数量。
+			levelSaucerMax=1+Math.floor(level/10);
+			if (levelSaucerMax > 5){
+				levelSaucerMax=5;
+			}
+			//boss的各种参数。
+			levelSaucerOccurenceRate=10+3*level;
+			if (levelSaucerOccurenceRate > 35){
+				levelSaucerOccurenceRate=35;
+			}
+			levelSaucerSpeed=1+.5*level;
+			if (levelSaucerSpeed>5){
+				levelSaucerSpeed=5;
+			}
+			levelSaucerFireDelay=120-10*level;
+			if (levelSaucerFireDelay<20) {
+				levelSaucerFireDelay=20;
+			}
+			
+			levelSaucerFireRate=20 + 3*level;
+			if (levelSaucerFireRate<50) {
+				levelSaucerFireRate=50;
+			}
+			
+			levelSaucerMissileSpeed=1+.2*level;
+			if (levelSaucerMissileSpeed > 4){
+				levelSaucerMissileSpeed=4;
+			}
+			
+			//通过level产生砖块。
+			for (var newRockctr=0;newRockctr<level+3;newRockctr++){
+				var newRock={};
+				
+				newRock.scale=1;
+
+				newRock.width=64;
+				newRock.height=64;
+				newRock.halfWidth=32;
+				newRock.halfHeight=32;
+				
+				newRock.hitWidth=48;
+				newRock.hitHeight=48;
+				
+				newRock.x=Math.floor(Math.random()*50);
+				newRock.y=Math.floor(Math.random()*50);
+				
+				newRock.dx=(Math.random()*2)+levelRockMaxSpeedAdjust;
+				if (Math.random()<.5){
+					newRock.dx*=-1;
+				}
+				newRock.dy=(Math.random()*2)+levelRockMaxSpeedAdjust;
+				if (Math.random()<.5){
+					newRock.dy*=-1;
+				}
+	
+				if (Math.random()<.5){
+					newRock.rotationInc=-1;
+				}else{
+					newRock.rotationInc=1;
+				}
+				
+				newRock.animationDelay=Math.floor(Math.random()*3+1);
+				newRock.animationCount=0;
+			
+				newRock.scoreValue=bigRockScore;
+				newRock.rotation=0;
+				
+				rocks.push(newRock);
+			}
+			resetPlayer();
+			switchGameState(GAME_STATE_PLAYER_START);
+		}
+		
+		//重置玩家。
+		function gameStatePlayerStart(){
+			renderScoreBoard();
+			if (player.alpha < 1){
+				player.alpha+=.01;
+			}else{
+				switchGameState(GAME_STATE_PLAY_LEVEL);
+				player.safe=false;
+			}
+			
+			context.globalAlpha=1;
+			checkKeys();
+			update();
+			render();
+			checkCollisions();
+			checkForExtraShip();
+			checkForEndOfLevel();
+			frameRateCounter.countFrames();
+		}
+		
+		//开始此level的循环。
+		function gameStatePlayLevel(){
+			checkKeys();
+			update();
+			render();
+			checkCollisions();
+			checkForExtraShip();
+			checkForEndOfLevel();
+			frameRateCounter.countFrames();
+		}
+		
+		function resetPlayer() {
+			player.rotation=270;
+			player.x=.5*xMax;
+			player.y=.5*yMax;
+			player.facingX=0;
+			player.facingY=0;
+			player.movingX=0;
+			player.movingY=0;
+			player.alpha=0;
+			player.missileFrameCount=0;
+			player.safe=true;
+		}
+		
+		//增加命
+		function checkForExtraShip() {
+			if (Math.floor(score/extraShipAtEach) > extraShipsEarned) {
+				playerShips++
+				extraShipsEarned++;
+			}
+		}
+		
+		//检测是否达到此level的要求。
+		function checkForEndOfLevel(){
+			if (rocks.length==0) {
+				switchGameState(GAME_STATE_NEW_LEVEL);
+			}
+		}
+		
+		//检测玩家是否死了。
+		function gameStatePlayerDie(){
+			if (particles.length >0) {
+				updateRocks();
+				updateSaucers();
+				updateParticles();
+				updateSaucerMissiles();
+				updatePlayerMissiles();
+				layer.clearVector();
+				gameVectors = [];
+				renderBackGround();
+				renderRocks();
+				renderSaucers();
+				renderParticles();
+				renderSaucerMissiles();
+				renderPlayerMissiles();
+				frameRateCounter.countFrames();
+				renderScoreBoard();
+			}else{
+				playerShips--;
+				if (playerShips<1) {
+					switchGameState(GAME_STATE_GAME_OVER);
+				}else{
+					switchGameState(GAME_STATE_PLAYER_START);
+				}
+			}
+		}
+		
+		
+		function gameStateGameOver() {
+			if (gameOverStarted !=true){
+				fillBackground();
+				renderScoreBoard();
+				setTextStyle();
+				context.fillText  ("游戏 结束!", xMax/2 - 30, yMax/5);
+				context.fillText  ("点击 空格 重新开始", xMax/2 - 60, yMax/5 * 2);
+				
+				gameOverStarted=true;
+			}else{
+				if (keyPressList[32]==true){
+					switchGameState(GAME_STATE_TITLE);
+					gameOverStarted=false;
+				}
+			}
+		}
+		
+		function fillBackground() {
+			context.fillStyle = '#000000';
+			context.fillRect(xMin, yMin, xMax, yMax);
+		}
+		
+		function setTextStyle() {
+			context.fillStyle    = '#ffffff';
+			context.font         = '15px _sans';
+			context.textBaseline = 'top';
+		}
+		
+		function setTextStyleTitle() {
+			context.fillStyle    = '#54ebeb';
+			context.font         = '20px _sans';
+			context.textBaseline = 'top';
+		}
+		
+		function setTextStyleCredits() {
+			context.fillStyle    = '#ffffff';
+			context.font         = '12px _sans';
+			context.textBaseline = 'top';
+		}
+
+		
+		function renderScoreBoard() {
+			context.fillStyle = "#ffffff";
+			context.fillText('得分 ' + score, 10, 20);
+			context.fillText('生命 ' + playerShips, 220, 20);
+			context.fillText('FPS: ' + frameRateCounter.lastFrameCount, 300,20)
+		}
+		
+		//检测按键
+		function checkKeys() {
+			//加速推进
+			if (keyPressList[87]==true){
+				var angleInRadians = player.rotation * Math.PI / 180;
+				player.facingX=Math.cos(angleInRadians);
+				player.facingY=Math.sin(angleInRadians);
+				
+				var movingXNew=player.movingX+player.thrustAcceleration*player.facingX;
+				var movingYNew=player.movingY+player.thrustAcceleration*player.facingY;
+				
+				var currentVelocity= Math.sqrt ((movingXNew*movingXNew) + (movingYNew*movingYNew));
+				
+				if (currentVelocity < player.maxVelocity) {
+					player.movingX=movingXNew;
+					player.movingY=movingYNew;
+				}
+				player.thrust=true;
+			}else{
+				player.thrust=false;
+				player.movingX*=.9;
+				player.movingY*=.9;
+			}
+			
+			
+			//左旋转
+			if (keyPressList[65]==true) {
+				player.rotation-=player.rotationalVelocity;
+				if (player.rotation <0) {
+					player.rotation=350
+				}
+			}
+			
+			//右旋转
+			if (keyPressList[68]==true) {
+				player.rotation+=player.rotationalVelocity;
+				if (player.rotation >350) {
+					player.rotation=10
+				}
+			}
+			
+			//玩家开火
+			if (keyPressList[32]==true) {
+				//检测开火速率
+				if (player.missileFrameCount>player.missileFrameDelay){
+					firePlayerMissile();
+					player.missileFrameCount=0;
+				}
+			}
+			
+			//放大
+			if (keyPressList[81]==true) {
+				if(layer.zoom < 400){
+					layer.zoom += 2;
+					layer.reDraw();
+				}
+			}
+			
+			//缩小
+			if (keyPressList[69]==true) {
+				if(layer.zoom > 90){
+					layer.zoom -= 2;
+					layer.reDraw();
+				}
+			}
+		}
+		
+		function update() {
+			//更新玩家位置。
+			updatePlayer();
+			//更玩家新子弹位置。
+			updatePlayerMissiles();
+			//更新方块位置。
+			updateRocks();
+			//更新boss位置。
+			updateSaucers();
+			//更新boss子弹位置。
+			updateSaucerMissiles();
+			//更新粒子位置。
+			updateParticles();
+		}
+		
+		
+		function render() {
+			layer.clearVector();
+			gameVectors = [];
+			renderBackGround();
+			renderPlayerShip(player.x,player.y,player.rotation,1);
+			renderPlayerMissiles();
+			renderRocks();
+			renderSaucers();
+			renderSaucerMissiles();
+			renderParticles();			
+			renderScoreBoard();
+		}
+		
+		//更新玩家位置
+		function updatePlayer() {
+			player.missileFrameCount++;
+			
+			player.x+=player.movingX*frameRateCounter.step;
+			player.y+=player.movingY*frameRateCounter.step;
+		}
+		
+		//更新玩家子弹位置
+		function updatePlayerMissiles() {
+			var tempPlayerMissile={};
+			var playerMissileLength=playerMissiles.length-1;
+			for (var playerMissileCtr=playerMissileLength;playerMissileCtr>=0;playerMissileCtr--){
+				tempPlayerMissile=playerMissiles[playerMissileCtr];
+				tempPlayerMissile.x+=tempPlayerMissile.dx*frameRateCounter.step;
+				tempPlayerMissile.y+=tempPlayerMissile.dy*frameRateCounter.step;
+				
+				//记录子弹生命。
+				tempPlayerMissile.lifeCtr++;
+				if (tempPlayerMissile.lifeCtr > tempPlayerMissile.life){
+					//子弹生命结束并删除。
+					playerMissiles.splice(playerMissileCtr,1)
+					tempPlayerMissile=null;
+				}
+			}
+		}
+		
+		//更新砖块位置
+		function updateRocks(){
+			var tempRock={};
+			var rocksLength=rocks.length-1;
+			for (var rockCtr=rocksLength;rockCtr>=0;rockCtr--){
+				tempRock=rocks[rockCtr]
+				tempRock.x+=tempRock.dx*frameRateCounter.step;
+				tempRock.y+=tempRock.dy*frameRateCounter.step;
+				
+				tempRock.animationCount++;
+				if (tempRock.animationCount > tempRock.animationDelay){
+					tempRock.animationCount=0;
+					tempRock.rotation+=tempRock.rotationInc;
+				}
+				
+				
+				if (tempRock.x > xMax) {
+					tempRock.x=xMin-tempRock.width;
+				}else if (tempRock.x<xMin-tempRock.width){
+					tempRock.x=xMax;
+				}
+				
+				if (tempRock.y > yMax) {
+					tempRock.y=yMin-tempRock.width;
+				}else if (tempRock.y<yMin-tempRock.width){
+					tempRock.y=yMax;
+				}
+				
+			}
+		}
+		
+		//更新boss位置。
+		function updateSaucers() {
+			//首先检测是否需要新增一个boss。
+			if (saucers.length< levelSaucerMax){
+				if (Math.floor(Math.random()*100)<=levelSaucerOccurenceRate){
+					var newSaucer={};
+					
+					newSaucer.width=30;
+					newSaucer.height=13;
+					newSaucer.halfHeight=6.5;
+					newSaucer.halfWidth=15;
+					newSaucer.hitWidth=30;
+					newSaucer.hitHeight=13;
+					newSaucer.scoreValue=saucerScore;
+					newSaucer.fireRate=levelSaucerFireRate;
+					newSaucer.fireDelay=levelSaucerFireDelay;
+					newSaucer.fireDelayCount=0;
+					newSaucer.missileSpeed=levelSaucerMissileSpeed;
+					newSaucer.dy=(Math.random()*2);
+					if (Math.floor(Math.random)*2==1){
+						newSaucer.dy*=-1;
+					}
+		
+					//选择boss出现在左边还是右边
+					if (Math.floor(Math.random()*2)==1){
+						newSaucer.x=450;
+						newSaucer.dx=-1*levelSaucerSpeed;
+					}else{
+						newSaucer.x=-50;
+						newSaucer.dx=levelSaucerSpeed;
+					}
+					
+					newSaucer.missileSpeed=levelSaucerMissileSpeed;
+					newSaucer.fireDelay=levelSaucerFireDelay;
+					newSaucer.fireRate=levelSaucerFireRate;
+					newSaucer.y=Math.floor(Math.random()*400);
+
+					saucers.push(newSaucer);
+				}
+			}
+			
+			
+			var tempSaucer={};
+			var saucerLength=saucers.length-1;
+			for (var saucerCtr=saucerLength;saucerCtr>=0;saucerCtr--){
+				tempSaucer=saucers[saucerCtr];
+				
+				//boss是否该发射子弹
+				tempSaucer.fireDelayCount++;
+				if (Math.floor(Math.random()*100) <=tempSaucer.fireRate && tempSaucer.fireDelayCount>tempSaucer.fireDelay ){
+					fireSaucerMissile(tempSaucer)
+					tempSaucer.fireDelayCount=0;
+				}
+				
+				var remove=false;
+				tempSaucer.x+=tempSaucer.dx*frameRateCounter.step;
+				tempSaucer.y+=tempSaucer.dy*frameRateCounter.step;
+				
+				//当boss位于左边界或右边界则删除boss
+				if (tempSaucer.dx > 0 && tempSaucer.x >xMax){
+					remove=true;
+				}else if (tempSaucer.dx <0 &&tempSaucer.x<xMin-tempSaucer.width){
+					remove=true;
+				}
+				
+				//而在垂直方向则反弹
+				if (tempSaucer.y > yMax || tempSaucer.y<yMin-tempSaucer.width) {
+					tempSaucer.dy*=-1
+				}
+				if (remove==true) {
+					saucers.splice(saucerCtr,1);
+					tempSaucer=null;
+				}
+			}
+		}
+		
+		//更新boss子弹位置
+		function updateSaucerMissiles() {
+			var tempSaucerMissile={};
+			var saucerMissileLength=saucerMissiles.length-1;
+			for (var saucerMissileCtr=saucerMissileLength;saucerMissileCtr>=0;saucerMissileCtr--){
+				tempSaucerMissile=saucerMissiles[saucerMissileCtr];
+				tempSaucerMissile.x+=tempSaucerMissile.dx*frameRateCounter.step;
+				tempSaucerMissile.y+=tempSaucerMissile.dy*frameRateCounter.step;
+				if (tempSaucerMissile.x > xMax) {
+					tempSaucerMissile.x=-tempSaucerMissile.width;
+				}else if (tempSaucerMissile.x<-tempSaucerMissile.width){
+					tempSaucerMissile.x=xMax;
+				}
+				
+				if (tempSaucerMissile.y > yMax) {
+					tempSaucerMissile.y=-tempSaucerMissile.height;
+				}else if (tempSaucerMissile.y<-tempSaucerMissile.height){
+					tempSaucerMissile.y=yMax;
+				}
+				
+				tempSaucerMissile.lifeCtr++;
+				if (tempSaucerMissile.lifeCtr > tempSaucerMissile.life){
+					saucerMissiles.splice(saucerMissileCtr,1)
+					tempSaucerMissile=null;
+				}
+			}
+		}
+		
+		//计算爆炸产生的粒子
+		function updateParticles() {
+			
+			var particleLength=particles.length-1;
+			for (var particleCtr=particleLength;particleCtr>=0;particleCtr--){
+				var remove =false;
+				tempParticle=particles[particleCtr];
+				tempParticle.x+=tempParticle.dx*frameRateCounter.step;
+				tempParticle.y+=tempParticle.dy*frameRateCounter.step;
+				
+				tempParticle.lifeCtr++;
+
+	  
+				if (tempParticle.lifeCtr > tempParticle.life){
+					remove=true;
+						
+				} else if ((tempParticle.x > xMax) || (tempParticle.x<xMin) || (tempParticle.y > yMax) || (tempParticle.y<yMin)){
+					remove=true;	
+				}
+
+				if (remove) {
+					particlePool.push(tempParticle)
+					particles.splice(particleCtr,1)
+				}
+			}
+		}
+		
+		//渲染背景
+		function renderBackGround(){
+			var img = new Img(new Point(0, 0), bgImg);
+			gameVectors.push(new Vector(img, imgStyle));
+		}
+
+		//渲染玩家飞机
+		function renderPlayerShip(x,y,rotation, scale) {
+			var points = [];
+			points.push(new Point(-10,-10), new Point(10,0), 
+				new Point(10,1), new Point(-10,10),new Point(1,1),new Point(1,-1),new Point(-10,-10));
+				
+			var angleInRadians = rotation * Math.PI / 180;
+			rotatePoints(points, angleInRadians);
+			translatePoints(points, x + player.halfWidth - xMax/2, y + player.halfHeight - yMax/2);
+			layer.center.x = x - xMax/2;
+			layer.center.y = -(y - yMax/2); 
+			playerShipStyle.fillOpacity = player.alpha;	
+			playerShipStyle.strokeOpacity = player.alpha;	
+			var playerShip = new Vector(new LinerRing(points), playerShipStyle);
+			gameVectors.push(playerShip);
+			
+			if (player.thrust){
+				var thrustPoints = [new Point(-4,-2), new Point(-4,1),new Point(-5,-1),
+					new Point(-10,-1),new Point(-5,0),new Point(-10,0)];
+				rotatePoints(thrustPoints, angleInRadians);
+				translatePoints(thrustPoints, x+player.halfWidth - xMax/2,y+player.halfHeight - yMax/2);
+				var playerThrust = new Vector(new Line(thrustPoints), trustStyle);
+				gameVectors.push(playerThrust);
+			}
+		}
+		
+		//旋转点
+		function rotatePoints(points, rotate) {
+			for(var i = 0; i < points.length; i++){
+				var point = points[i];
+				var w = -rotate + Math.atan2(point.y, point.x);
+				var r = Math.sqrt(point.x * point.x + point.y * point.y);
+				point.x = Math.floor(Math.cos(w) * r);
+				point.y = Math.floor(Math.sin(w) * r);
+			}
+		}
+		
+		//平移点
+		function translatePoints(points, x, y) {
+			for(var i = 0; i < points.length; i++){
+				var point = points[i];
+				point.x += x;
+				point.y -= y;
+			}
+		}
+		
+		//渲染玩家子弹
+		function renderPlayerMissiles() {
+			var tempPlayerMissile={};
+			var playerMissileLength=playerMissiles.length-1;
+			for (var playerMissileCtr=playerMissileLength;playerMissileCtr>=0;playerMissileCtr--){
+				tempPlayerMissile=playerMissiles[playerMissileCtr];
+				var missile = new Vector(new Point(tempPlayerMissile.x - xMax/2, -tempPlayerMissile.y + yMax/2), playerMissileStyle);
+				gameVectors.push(missile);
+			}
+		}
+		
+		//渲染砖块
+		function renderRocks() {
+			var tempRock={};
+			var rocksLength=rocks.length-1;
+			for (var rockCtr=rocksLength;rockCtr>=0;rockCtr--){
+				context.save();
+				tempRock=rocks[rockCtr];
+				var angleInRadians = tempRock.rotation * Math.PI / 180;
+				var thrustPoints = [new Point(-(tempRock.halfWidth-1),-(tempRock.halfHeight-1)), 
+					new Point((tempRock.halfWidth-1),-(tempRock.halfHeight-1)),
+					new Point((tempRock.halfWidth-1),(tempRock.halfHeight-1)),
+					new Point(-(tempRock.halfWidth-1),(tempRock.halfHeight-1)),
+					new Point(-(tempRock.halfWidth-1),-(tempRock.halfHeight-1))];
+				rotatePoints(thrustPoints, angleInRadians);
+				translatePoints(thrustPoints, tempRock.x+tempRock.halfWidth-xMax/2,
+					tempRock.y+tempRock.halfHeight-yMax/2);
+				switch (tempRock.scale){
+					case 1:
+						var rock = new Vector(new LinerRing(thrustPoints), rockBigStyle);
+						break;
+					case 2:
+						var rock = new Vector(new LinerRing(thrustPoints), rockMedStyle);
+						break;
+					case 3:
+						var rock = new Vector(new LinerRing(thrustPoints), rockSamStyle);
+						break;	
+				}
+				gameVectors.push(rock);
+			}
+		}
+		
+		//渲染boss
+		function renderSaucers() {
+			var tempSaucer={};
+			var saucerLength=saucers.length-1;
+			for (var saucerCtr=saucerLength;saucerCtr>=0;saucerCtr--){
+				tempSaucer=saucers[saucerCtr];
+				var saucerPoints = [new Point(4,0), new Point(9,0),new Point(12,3),
+					new Point(13,3),new Point(13,4),new Point(10,7),
+					new Point(3,7),new Point(1,5),new Point(12,5),
+					new Point(0,4),new Point(0,3),new Point(13,3),
+					new Point(5,1),new Point(5,2),new Point(8,1),
+					new Point(8,2),new Point(2,2),new Point(4,0)];
+				translatePoints(saucerPoints, tempSaucer.x-xMax/2,tempSaucer.y-yMax/2);
+				var saucer = new Vector(new LinerRing(saucerPoints), saucerStyle);
+				gameVectors.push(saucer);
+			}			
+		}
+		
+		//渲染boss的子弹。
+		function renderSaucerMissiles() {
+			var tempSaucerMissile={};
+			var saucerMissileLength=saucerMissiles.length-1;
+			for (var saucerMissileCtr=saucerMissileLength;saucerMissileCtr>=0;saucerMissileCtr--){
+				tempSaucerMissile=saucerMissiles[saucerMissileCtr];
+				var missile = new Vector(new Point(tempSaucerMissile.x - xMax/2, -tempSaucerMissile.y + yMax/2),
+					saucerMissileStyle);
+				gameVectors.push(missile);
+			}			
+		}
+		
+		//渲染碰撞产生的粒子。
+		function renderParticles() {
+			var tempParticle={};
+			var particleLength=particles.length-1;
+			for (var particleCtr=particleLength;particleCtr>=0;particleCtr--){
+				tempParticle=particles[particleCtr];
+				var particle = new Vector(new Point(tempParticle.x - xMax/2, -tempParticle.y + yMax/2),
+					particleStyle);
+				gameVectors.push(particle);
+			}
+			layer.reDraw();
+			layer.addVectors(gameVectors);
+		}
+		
+		//碰撞检测
+		function checkCollisions() {
+		
+			var tempRock={};
+			var rocksLength=rocks.length-1;
+			var tempPlayerMissile={};
+			var playerMissileLength=playerMissiles.length-1;
+			var saucerLength=saucers.length-1;
+			var tempSaucer={};
+			var saucerMissileLength=saucerMissiles.length-1;
+			
+			
+			rocks: for (var rockCtr=rocksLength;rockCtr>=0;rockCtr--){
+				tempRock=rocks[rockCtr];
+			
+				missiles:for (var playerMissileCtr=playerMissileLength;playerMissileCtr>=0;playerMissileCtr--){
+					tempPlayerMissile=playerMissiles[playerMissileCtr];
+					
+					
+					if (boundingBoxCollide(tempRock,tempPlayerMissile)){
+							createExplode(tempRock.x+tempRock.halfWidth,tempRock.y+tempRock.halfHeight,10,tempRock.scale);
+							if (tempRock.scale<3) {
+								splitRock(tempRock.scale+1, tempRock.x, tempRock.y);
+							}
+							addToScore(tempRock.scoreValue);
+							playerMissiles.splice(playerMissileCtr,1);
+							tempPlayerMissile=null;
+							
+							
+							rocks.splice(rockCtr,1);
+							tempRock=null;
+							
+							
+							break rocks;
+							break missiles;
+						}
+					}
+				
+				saucers:for (var saucerCtr=saucerLength;saucerCtr>=0;saucerCtr--){
+					tempSaucer=saucers[saucerCtr];
+					
+					
+					if (boundingBoxCollide(tempRock,tempSaucer)){
+							createExplode(tempSaucer.x+tempSaucer.halfWidth,tempSaucer.y+tempSaucer.halfHeight,10,0);
+							createExplode(tempRock.x+tempRock.halfWidth,tempRock.y+tempRock.halfHeight,10,tempRock.scale);
+							
+							if (tempRock.scale<3) {
+								splitRock(tempRock.scale+1, tempRock.x, tempRock.y);
+							}
+							
+							saucers.splice(saucerCtr,1);
+							tempSaucer=null;
+							
+							
+							rocks.splice(rockCtr,1);
+							tempRock=null;
+							
+							
+							break rocks;
+							break saucers;
+						}
+					}
+
+				saucerMissiles:for (var saucerMissileCtr=saucerMissileLength;saucerMissileCtr>=0;saucerMissileCtr--){
+					tempSaucerMissile=saucerMissiles[saucerMissileCtr];
+					
+					
+					if (boundingBoxCollide(tempRock,tempSaucerMissile)){
+							
+							createExplode(tempRock.x+tempRock.halfWidth,tempRock.y+tempRock.halfHeight,10,tempRock.scale);
+							if (tempRock.scale<3) {
+								splitRock(tempRock.scale+1, tempRock.x, tempRock.y);
+							}
+							
+							saucerMissiles.splice(saucerCtr,1);
+							tempSaucerMissile=null;
+							
+							
+							rocks.splice(rockCtr,1);
+							tempRock=null;
+							
+							
+							break rocks;
+							break saucerMissiles;
+						}
+					}
+					
+								
+				if (boundingBoxCollide(tempRock,player) && player.safe==false){
+					createExplode(tempRock.x+tempRock.halfWidth,tempRock.halfHeight,10,tempRock.scale);
+					addToScore(tempRock.scoreValue);
+					if (tempRock.scale<3) {
+						splitRock(tempRock.scale+1, tempRock.x, tempRock.y);
+					}
+					rocks.splice(rockCtr,1);
+					tempRock=null;
+					
+					playerDie();
+				}
+				
+			
+			}
+			
+			
+			playerMissileLength=playerMissiles.length-1;
+			saucerLength=saucers.length-1;
+			saucers:for (var saucerCtr=saucerLength;saucerCtr>=0;saucerCtr--){
+				tempSaucer=saucers[saucerCtr];
+				
+				missiles:for (var playerMissileCtr=playerMissileLength;playerMissileCtr>=0;playerMissileCtr--){
+					tempPlayerMissile=playerMissiles[playerMissileCtr];
+					
+					
+					if (boundingBoxCollide(tempSaucer,tempPlayerMissile)){
+						createExplode(tempSaucer.x+tempSaucer.halfWidth,tempSaucer.y+tempSaucer.halfHeight,10,0);
+						addToScore(tempSaucer.scoreValue);
+						
+						playerMissiles.splice(playerMissileCtr,1);
+						tempPlayerMissile=null;
+						
+						
+						saucers.splice(saucerCtr,1);
+						tempSaucer=null;
+						
+						
+						break saucers;
+						break missiles;
+					}
+				}
+			
+				if (boundingBoxCollide(tempSaucer,player) & player.safe==false){
+					createExplode(tempSaucer.x+16,tempSaucer.y+16,10,tempRock.scale);
+					addToScore(tempSaucer.scoreValue);
+					
+					saucers.splice(rockCtr,1);
+					tempSaucer=null;
+					
+					playerDie();
+				}
+			}
+			
+			saucerMissileLength=saucerMissiles.length-1;
+			
+			saucerMissiles:for (var saucerMissileCtr=saucerMissileLength;saucerMissileCtr>=0;saucerMissileCtr--){
+				
+				tempSaucerMissile=saucerMissiles[saucerMissileCtr];
+				
+				
+				if (boundingBoxCollide(player,tempSaucerMissile) & player.safe==false){
+					
+					playerDie();
+					saucerMissiles.splice(saucerCtr,1);
+					tempSaucerMissile=null;
+				
+					break saucerMissiles;
+				}
+			}
+		}
+		
+		
+		function firePlayerMissile(){
+			var newPlayerMissile={};
+			newPlayerMissile.dx=10*Math.cos(Math.PI*(player.rotation)/180);
+			newPlayerMissile.dy=10*Math.sin(Math.PI*(player.rotation)/180);
+			newPlayerMissile.x=player.x+player.halfWidth;
+			newPlayerMissile.y=player.y+player.halfHeight;
+			newPlayerMissile.life=200;
+			newPlayerMissile.lifeCtr=0;
+			newPlayerMissile.width=2;
+			newPlayerMissile.height=2;
+			newPlayerMissile.hitHeight=2;
+			newPlayerMissile.hitWidth=2;
+			playerMissiles.push(newPlayerMissile);
+		}
+		
+		
+		function fireSaucerMissile(saucer) {
+			var newSaucerMissile={};
+			newSaucerMissile.x=saucer.x+.5*saucer.width;
+			newSaucerMissile.y=saucer.y+.5*saucer.height;
+			
+			newSaucerMissile.width=2;
+			newSaucerMissile.height=2;
+			newSaucerMissile.hitHeight=2;
+			newSaucerMissile.hitWidth=2;
+			newSaucerMissile.speed=saucer.missileSpeed;
+			
+			var diffx = player.x-saucer.x;
+			var diffy = player.y-saucer.y;
+			var radians = Math.atan2(diffy, diffx);
+			var degrees = 360 * radians / (2 * Math.PI);
+			newSaucerMissile.dx=saucer.missileSpeed*Math.cos(Math.PI*(degrees)/180);
+			newSaucerMissile.dy=saucer.missileSpeed*Math.sin(Math.PI*(degrees)/180);
+			newSaucerMissile.life=160;
+			newSaucerMissile.lifeCtr=0;
+			saucerMissiles.push(newSaucerMissile);
+		}
+		
+		function playerDie(){
+			createExplode(player.x+player.halfWidth, player.y+player.halfWidth,50,4);
+			resetPlayer();
+			switchGameState(GAME_STATE_PLAYER_DIE);
+		}
+		
+		
+		function createExplode(x,y,num,type) {
+			for (var partCtr=0;partCtr<num;partCtr++){
+			   if (particlePool.length > 0){
+				
+					newParticle=particlePool.pop();
+				newParticle.dx=Math.random()*3;
+					if (Math.random()<.5){
+						newParticle.dx*=-1;
+					}
+				newParticle.dy=Math.random()*3;
+				if (Math.random()<.5){
+					newParticle.dy*=-1;
+				}
+				
+				newParticle.life=Math.floor(Math.random()*5+5);
+				newParticle.lifeCtr=0;
+				newParticle.x=x;
+				newParticle.width=2;
+				newParticle.height=2;
+				newParticle.y=y;
+				newParticle.type=type;
+				particles.push(newParticle);
+			   }
+			}
+		}
+		
+		function boundingBoxCollide(object1, object2) {
+			var left1 = object1.x;
+			var left2 = object2.x;
+			var right1 = object1.x + object1.hitWidth;
+			var right2 = object2.x + object2.hitWidth;
+			var top1 = object1.y;
+			var top2 = object2.y;
+			var bottom1 = object1.y + object1.hitHeight;
+			var bottom2 = object2.y + object2.hitHeight;
+			
+			if (bottom1 < top2) return(false);
+			if (top1 > bottom2) return(false);
+			
+			if (right1 < left2) return(false);
+			if (left1 > right2) return(false);
+			
+			return(true);
+
+		};
+
+		function splitRock(scale,x,y){
+			for (var newRockctr=0;newRockctr<2;newRockctr++){
+				var newRock={};
+				if (scale==2){
+					newRock.scoreValue=medRockScore;
+					newRock.width=32;
+					newRock.height=32;
+					newRock.halfWidth=16;
+					newRock.halfHeight=16;
+					newRock.hitWidth=24;
+					newRock.hitHeight=24;
+					
+				}else {
+					newRock.scoreValue=smlRockScore;
+					newRock.width=24;
+					newRock.height=24;
+					newRock.halfWidth=12;
+					newRock.halfHeight=12;
+					newRock.hitWidth=16;
+					newRock.hitHeight=16;
+				}
+				
+				newRock.scale=scale;
+				newRock.x=x;
+				newRock.y=y;
+				newRock.dx=Math.random()*3;
+				if (Math.random()<.5){
+					newRock.dx*=-1;
+				}
+				newRock.dy=Math.random()*3;
+				if (Math.random()<.5){
+					newRock.dy*=-1;
+				}
+				if (Math.random()<.5){
+						newRock.rotationInc=-1;
+				}else{
+					newRock.rotationInc=1;
+				}
+					
+				newRock.animationDelay=Math.floor(Math.random()*3+1);
+				newRock.animationCount=0;
+				newRock.rotation=0;
+				rocks.push(newRock);
+			}
+		}
+		
+		function addToScore(value){
+			score+=value;
+		}
+		
+		document.onkeydown=function(e){
+			e=e?e:window.event;
+			keyPressList[e.keyCode]=true;
+		}
+		
+		document.onkeyup=function(e){
+			e=e?e:window.event;
+			keyPressList[e.keyCode]=false;
+		};
+		
+		document.addEventListener("touchstart", function(e){
+			var touch = e.targetTouches[0]; 
+			keyPressList[87] = true;
+			keyPressList[32] = true;
+			stopEvent(e);
+		});
+		
+		document.addEventListener("touchend", function(e){
+			var touch = e.changedTouches[0];
+			keyPressList[87] = false;
+			keyPressList[32] = false;
+			stopEvent(e);
+		});
+		
+		window.ondevicemotion = function(event) {
+			var ax = event.accelerationIncludingGravity.x;
+			//alert(ax);
+			console.log(ax);
+			if(keyPressList[87] != true){
+				if(ax < -2){
+					keyPressList[65] = false;
+					keyPressList[68] = true;
+				}else if(ax > 2){				
+					keyPressList[65] = true;
+					keyPressList[68] = false;
+				}else{
+					keyPressList[65] = false;
+					keyPressList[68] = false;
+				}
+			}else{
+				keyPressList[65] = false;
+				keyPressList[68] = false;
+			}
+		}
+		
+		function stopEvent(e){
+		    if (e.preventDefault) {
+				e.preventDefault();
+			} else {
+				e.returnValue = false;
+			}
+
+			if (e && e.stopPropagation)
+				e.stopPropagation();
+			else
+				window.event.cancelBubble=true;
+		}
+
+		switchGameState(GAME_STATE_INIT);
+		var FRAME_RATE=40;
+		frameRateCounter=new FrameRateCounter(FRAME_RATE);		
+		var intervalTime=1000/FRAME_RATE;
+		setInterval(runGame, intervalTime );
+	}
+	
+	function ConsoleLog(){
+		
+	}
+
+	console_log=function(message) {
+		if(typeof(console) !== 'undefined' && console != null) {
+		}
+	}
+	
+	ConsoleLog.log=console_log;
+
+	function FrameRateCounter(fps) {
+			
+		if (fps == undefined){
+			this.fps=40
+		}else{
+			this.fps=fps
+		}
+		this.lastFrameCount=0;
+		var dateTemp =new Date();
+		this.frameLast=dateTemp.getTime();
+		delete dateTemp;
+		this.frameCtr=0;
+		
+		this.lastTime=dateTemp.getTime();
+		this.step=1;
+	}
+
+	FrameRateCounter.prototype.countFrames=function() {
+		var dateTemp =new Date();	
+
+		var timeDifference=dateTemp.getTime()-this.lastTime;
+		this.step=(timeDifference/1000)*this.fps;
+		this.lastTime=dateTemp.getTime();
+		
+		this.frameCtr++;
+		if (dateTemp.getTime() >=this.frameLast+1000) {
+			this.lastFrameCount=this.frameCtr;
+			this.frameCtr=0;
+			this.frameLast=dateTemp.getTime();
+		}
+		
+		delete dateTemp;
+	}	
+</script>
+</head>
+<body>
+<div style="position:absolute; left:0px; top:0px" id="canvas"></div>
+</body>
+</html>

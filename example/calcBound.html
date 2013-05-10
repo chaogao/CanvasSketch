@@ -1,0 +1,139 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+<script src = "../libs/CanvasSketch.js"></script>
+<script type = "text/javascript">
+    var layer;
+    var circleStyle = {fillColor:"blue", fill:true, stroke:true, fillOpacity:1, strokeOpacity:1};
+    var starStyle = {fillColor:"yellow", fill:true, stroke:true, fillOpacity:0.4, strokeOpacity:1};
+    var outLineStyle = {fillColor:"#f4fffc", fill:true, stroke:true, fillOpacity:0.2, strokeOpacity:1};
+    var imgStyle = {fill:true, stroke:true, fillOpacity:1, strokeOpacity:1};
+    if(window.attachEvent) {window.attachEvent("onload", init2);} else {window.addEventListener("load", init2, true);}
+    function init2() {            
+        var div = document.getElementById("renderer2");
+        div.innerHTML = "";
+        layer = new Layer(div);
+        for(var i=0; i<1; i++) {
+            addPoint();
+        }
+        for(var i=0; i<1; i++) {
+            addCircle();
+        }
+        for(var i=0; i<1; i++) {
+            addLine();
+        }
+        for(var i=0; i<1; i++) {
+            addLinerRing();
+        }
+        for(var i=0; i<1; i++) {
+            addStar();
+        }
+        for(var i=0; i<1; i++) {
+            addImage();
+        }
+    }
+    
+    function addImage() {
+        var vectors = [];
+        var img = new Img(new Point((Math.random()*400-200), (Math.random()*300-150)), "../imgs/plane.png");
+        vectors.push(new Vector(img, imgStyle));
+        layer.addVectors(vectors);
+    }
+    
+    function addPoint() {
+        var vectors = [];
+        var point = new Point((Math.random()*400-200), (Math.random()*300-150));
+        vectors.push(new Vector(point));
+        layer.addVectors(vectors);
+    }
+    
+    function addCircle() {
+        var vectors = [];
+        var circle = new Circle((Math.random()*400-200), (Math.random()*300-150), Math.random()*10 + 5);
+        var vector = new Vector(circle, circleStyle);
+        vectors.push(vector);
+        
+        //获取轮廓。
+        var bounds = vector.geometry.getBounds();
+        var boundsPoints = [new Point(bounds.left, bounds.bottom), 
+                            new Point(bounds.left, bounds.top), 
+                            new Point(bounds.right, bounds.top),
+                            new Point(bounds.right, bounds.bottom)];
+        var outLine = new Vector(new LinerRing(boundsPoints),outLineStyle);
+        vectors.push(outLine);
+        
+        layer.addVectors(vectors);
+    }
+    
+    function addLine() {
+        var vectors = [];
+        var points = [];
+        for(var i = 0; i < 3; i++) {
+            var point = new Point((Math.random()*400-200), (Math.random()*300-150));
+            points.push(point);
+        }
+        var line = new Vector(new Line(points));
+        vectors.push(line);
+        
+        //获取轮廓。
+        var bounds = line.geometry.getBounds();
+        var boundsPoints = [new Point(bounds.left, bounds.bottom), 
+                            new Point(bounds.left, bounds.top), 
+                            new Point(bounds.right, bounds.top),
+                            new Point(bounds.right, bounds.bottom)];
+        var outLine = new Vector(new LinerRing(boundsPoints),outLineStyle);
+        vectors.push(outLine);
+        
+        layer.addVectors(vectors);
+    }
+    
+    function addLinerRing() {
+        var vectors = [];
+        var points = [];
+        for(var i = 0; i < 3; i++) {
+            var point = new Point((Math.random()*400-200), (Math.random()*300-150));
+            points.push(point);
+        }
+        var linerRing = new Vector(new LinerRing(points));
+        vectors.push(linerRing);
+        
+        //获取轮廓。
+        var bounds = linerRing.geometry.getBounds();
+        var boundsPoints = [new Point(bounds.left, bounds.bottom), 
+                            new Point(bounds.left, bounds.top), 
+                            new Point(bounds.right, bounds.top),
+                            new Point(bounds.right, bounds.bottom)];
+        var outLine = new Vector(new LinerRing(boundsPoints),outLineStyle);
+        vectors.push(outLine);
+        
+        layer.addVectors(vectors);
+    }
+    
+    function addStar() {
+        var vectors = [];
+        var point = new Point((Math.random()*400-200), (Math.random()*300-150));
+        var star = new Vector(new Star(point, Math.random()*10 +10), starStyle);
+        vectors.push(star);
+        
+        //获取轮廓。
+        var bounds = star.geometry.getBounds();
+        var boundsPoints = [new Point(bounds.left, bounds.bottom), 
+                            new Point(bounds.left, bounds.top), 
+                            new Point(bounds.right, bounds.top),
+                            new Point(bounds.right, bounds.bottom)];
+        var outLine = new Vector(new LinerRing(boundsPoints),outLineStyle);
+        vectors.push(outLine);
+        
+        layer.addVectors(vectors);
+    }
+</script>
+</head>
+<body>
+<div  style="width:600px; height:400px; border:1px solid black" id="renderer2">&nbsp;</div>
+<button type="button" onclick="addPoint()">添加点</button>
+<button type="button" onclick="addCircle()">添加圆</button>
+<button type="button" onclick="addLine()">添加线</button>
+<button type="button" onclick="addLinerRing()">添加面</button>
+<button type="button" onclick="addStar()">添五角星</button>
+</body>
+</html>

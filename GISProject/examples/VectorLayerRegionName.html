@@ -1,0 +1,394 @@
+﻿<!DOCTYPE HTML>
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0,  minimum-scale=1.0, user-scalable=0" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <title>VectorLayerRegionName</title>
+    <link rel="stylesheet"  href="./css/style.css" />
+    <script src="./js/jquery-1.7.min.js"></script>
+    <script src="./js/common.js"></script>
+    <script src="../libs/SuperMap.js"></script>
+    <script type="text/javascript">
+		$(document).ready(function () {
+            // 调整子页面布局
+            adjustSubFrame();
+            // 子页面事件响应函数封装
+            clickmessage();
+            // 地图初始化
+            init();
+        });
+		
+        var map, local, layer, vectorLayer, features, select, tempLayer , drag, delIndex = 0, editEnable = false,
+            //设置图层样式
+            style = {
+				externalGraphic: "./images/marker.png",
+				graphicWidth: 13,
+				graphicHeight: 16,
+				name: "town"
+            },
+			styleCity = {
+				pointRadius: 10,
+				externalGraphic: "./images/markerbig.png",
+				name: "city"
+            },styleCaptial = {
+				pointRadius: 15,
+				externalGraphic: "./images/markerflag.png",
+				name: "captial"
+            },transformControl;
+			
+        //定义初始化函数
+        function init() {
+            //加载map控件
+            map = new SuperMap.Map("map",{controls: [
+                      new SuperMap.Control.LayerSwitcher(),
+                      new SuperMap.Control.ScaleLine(),
+                      new SuperMap.Control.PanZoomBar(),
+                      new SuperMap.Control.Navigation({
+                          dragPanOptions: {
+                              enableKinetic: true
+                          }
+                  })], units: "m"
+            });
+            //初始化图层
+            layer = new SuperMap.Layer.TiledDynamicRESTLayer("China400", China_Map, {transparent: true, cacheEnabled: true}, {maxResolution:"auto"}); 
+            layer.events.on({"layerInitialized":addLayer});    
+            //初始化Vector图层
+            vectorLayer = new SuperMap.Layer.Vector("Vector Layer", {renderers: ["Canvas2"]});
+            //给在vector图层上所选择的要素初始化
+            select = new SuperMap.Control.SelectFeature(vectorLayer, {onSelect: onFeatureSelect, onUnselect: onFeatureUnselect});
+            map.addControl(select);
+        }
+        
+        //要素被选中时调用此函数
+        function onFeatureSelect(feature) {
+			if(editEnable) {
+				editSelectedFeatures();
+			} else {
+				selectedFeature = feature;
+				//初始化一个弹出窗口，当某个地图要素被选中时会弹出此窗口，用来显示选中地图要素的属性信息
+				popup = new SuperMap.Popup("chicken", 
+										 feature.geometry.getBounds().getCenterLonLat(),
+										 new SuperMap.Size(100,15),
+										 "<div style='font-size:.8em; opacity: 0.8'>" + feature.attributes.fieldValues[4] + "</div>",
+										 null, true, onPopupClose);
+				feature.popup = popup;
+				map.addPopup(popup);
+			}
+        }
+		
+		//编辑选择的要素
+        function editSelectedFeatures() {
+            if(vectorLayer.selectedFeatures.length == 1) {
+                var feature = vectorLayer.selectedFeatures[0];
+                //先删除popup。
+				if(feature.popup) {
+					map.removePopup(feature.popup);
+					feature.popup.destroy();
+					feature.popup = null;
+				}
+                tempLayer =new SuperMap.Layer.Vector("tempEdit", {renderers: ["SVG"]});
+                map.addLayer(tempLayer);
+				var cloneFeature = feature.clone();
+				switch (cloneFeature.style.name) {
+					case "town":
+						cloneFeature.style = {
+							externalGraphic: "./images/marker_select.png",
+							graphicWidth: 13,
+							graphicHeight: 16,
+							name: "town"
+						}
+						break;
+					case "city":
+						cloneFeature.style = {
+							pointRadius: 10,
+							externalGraphic: "./images/markerbig_select.png",
+							name: "city"
+						};
+						break;
+					case "captial":
+						cloneFeature.style = {
+							pointRadius: 15,
+							externalGraphic: "./images/markerflag_select.png",
+							name: "captial"
+						};
+						break;
+				}
+                tempLayer.addFeatures(cloneFeature);
+                //删除以前的feature
+                vectorLayer.removeFeatures(feature);
+                
+                drag = new SuperMap.Control.DragFeature(tempLayer);
+                map.addControl(drag);
+                drag.activate();
+				
+                drag.onComplete = function(feature, pixel) {
+					switch (feature.style.name) {
+						case "town":
+							feature.style = style;
+							break;
+						case "city":
+							cloneFeature.style = styleCity;
+							break;
+						case "captial":
+							cloneFeature.style = styleCaptial;
+							break;
+					}
+                    vectorLayer.addFeatures(feature);
+                    map.removeLayer(tempLayer);
+                    tempLayer.destroy();
+                    drag.outFeature(feature);
+                    drag.deactivate();
+                }
+            }else {
+                alert("请选择一个feature")
+            }
+        }
+		
+        //关闭弹出窗口
+        function onPopupClose(evt) {
+            selectControl.unselect(selectedFeature);
+        }
+        //清除要素时调用此函数
+        function onFeatureUnselect(feature) {
+          //map.removePopup(feature.popup);
+          //feature.popup.destroy();
+          //feature.popup = null;
+        }
+		
+        //添加图层
+        function addLayer() {
+            map.addLayers([layer,vectorLayer]);            
+            map.setCenter(new SuperMap.LonLat(13008120, 4327701), 3);    
+            map.addControl(new SuperMap.Control.MousePosition()) ;            
+        }        
+
+        //SQL查询
+        function queryBySQL() {
+            vectorLayer.removeAllFeatures();
+
+			//查询中国的部分县。
+            var queryParam, queryBySQLParams, queryBySQLService;
+            //初始化查询参数
+            queryParam = new SuperMap.REST.FilterParameter({
+                name: "China_Town_P@China400",
+                attributeFilter: "SmID < 10000"
+            }),
+            //初始化sql查询参数
+            queryBySQLParams = new SuperMap.REST.QueryBySQLParameters({
+                queryParams: [queryParam]
+            }),
+            //SQL查询服务
+            queryBySQLService = new SuperMap.REST.QueryBySQLService(China_Map, {
+                eventListeners: {"processCompleted": processCompleted, "processFailed": processFailed}});
+            queryBySQLService.processAsync(queryBySQLParams);
+			
+			//查询中国的全部市。
+			var queryParamCity, queryBySQLParamsCity, queryBySQLServiceCity;
+            //初始化查询参数
+            queryParamCity = new SuperMap.REST.FilterParameter({
+                name: "China_PreCenCity_P@China400",
+                attributeFilter: "SmID > 0"
+            }),
+            //初始化sql查询参数
+            queryBySQLParamsCity = new SuperMap.REST.QueryBySQLParameters({
+                queryParams: [queryParamCity]
+            }),
+            //SQL查询服务
+            queryBySQLServiceCity = new SuperMap.REST.QueryBySQLService(China_Map, {
+                eventListeners: {"processCompleted": processCompletedCity, "processFailed": processFailedCity}});
+            queryBySQLServiceCity.processAsync(queryBySQLParamsCity);
+			
+			//查询中国的全部省会。
+			var queryParamCapital, queryBySQLParamsCapital, queryBySQLServiceCapital;
+            //初始化查询参数
+            queryParamCapital = new SuperMap.REST.FilterParameter({
+                name: "China_Capital_P@China400",
+                attributeFilter: "SmID < 10"
+            }),
+            //初始化sql查询参数
+            queryBySQLParamsCapital = new SuperMap.REST.QueryBySQLParameters({
+                queryParams: [queryParamCapital]
+            }),
+            //SQL查询服务
+            queryBySQLServiceCapital = new SuperMap.REST.QueryBySQLService(China_Map, {
+                eventListeners: {"processCompleted": processCompletedCapital, "processFailed": processFailedCapital}});
+            queryBySQLServiceCapital.processAsync(queryBySQLParamsCapital);
+        }
+		
+        //SQL查询(县)成功时触发此事件
+        function processCompleted(queryEventArgs) {
+            var i, j, feature, 
+                result = queryEventArgs.result;
+            features = [];
+           if (result && result.recordsets) {
+                for (i=0; i<result.recordsets.length; i++) {
+                    if (result.recordsets[i].features) {
+                        for (j=0; j<result.recordsets[i].features.length; j++) {
+                            feature = result.recordsets[i].features[j];
+                            feature.style = style;
+                            features.push(feature);
+                        }
+                    }
+                }
+            }
+            
+            vectorLayer.addFeatures(features);
+            select.activate();
+        }
+        //SQL查询(县)失败时出发的事件
+        function processFailed(e) {
+            alert(e.error.errorMsg);
+        }
+		
+		//SQL查询(城市)成功时触发此事件
+        function processCompletedCity(queryEventArgs) {
+            var i, j, feature, 
+                result = queryEventArgs.result;
+            features = [];
+           if (result && result.recordsets) {
+                for (i=0; i<result.recordsets.length; i++) {
+                    if (result.recordsets[i].features) {
+                        for (j=0; j<result.recordsets[i].features.length; j++) {
+                            feature = result.recordsets[i].features[j];
+                            feature.style = styleCity;
+                            features.push(feature);
+                        }
+                    }
+                }
+            }
+            vectorLayer.addFeatures(features);
+            select.activate();
+        }
+		
+        //SQL查询(城市)失败时出发的事件
+        function processFailedCity(e) {
+            alert(e.error.errorMsg);
+        }
+		
+		//SQL查询(省会)成功时触发此事件
+        function processCompletedCapital(queryEventArgs) {
+            var i, j, feature, 
+                result = queryEventArgs.result;
+            features = [];
+           if (result && result.recordsets) {
+                for (i=0; i<result.recordsets.length; i++) {
+                    if (result.recordsets[i].features) {
+                        for (j=0; j<result.recordsets[i].features.length; j++) {
+                            feature = result.recordsets[i].features[j];
+                            feature.style = styleCaptial;
+                            features.push(feature);
+                        }
+                    }
+                }
+            }
+            vectorLayer.addFeatures(features);
+            select.activate();
+        }
+		
+        //SQL查询(省会)失败时出发的事件
+        function processFailedCapital(e) {
+            alert(e.error.errorMsg);
+        }
+
+        //清除全部要素
+        function clearFeatures() {
+			if(vectorLayer.selectedFeatures.length > 0) {
+				map.removePopup(vectorLayer.selectedFeatures[0].popup);
+			}
+            vectorLayer.removeAllFeatures();
+        }
+		
+        //清除选择的要素
+        function clearSelectedFeatures() {
+            if(vectorLayer.selectedFeatures.length > 0) {
+                var selectFeatures = vectorLayer.selectedFeatures;
+                for (var i = 0; i < selectFeatures.length; i ++) {
+                    var feature = selectFeatures[i];
+                    map.removePopup(feature.popup);
+                    feature.popup.destroy();
+                    feature.popup = null;
+                }
+                vectorLayer.removeFeatures(vectorLayer.selectedFeatures);
+            }
+        }
+
+        //清除指定数目的要素
+        function clearFewFeatures() {
+            var delFeatures = [];
+            for(var i = delIndex; i < delIndex + 100; i++) {
+                delFeatures.push(features[i])
+            }
+            vectorLayer.removeFeatures(delFeatures);
+            delIndex += 100;
+        }
+		
+		//开关编辑功能。
+		function switchEdit(label) {
+			if(editEnable) {
+				label.innerHTML = "启动编辑";
+				editEnable = false;
+			}else {
+				label.innerHTML = "关闭编辑";
+				editEnable = true;
+				editSelectedFeatures();
+			}
+		}
+    </script>
+  </head>
+  <body >
+    <div id="core" >
+        <div id="map" >             
+        </div>
+        <div id="description">
+            <div>
+               <div id="nav" >
+                <a href="javascript:void(0)" target="_self" class="add-big" ></a>
+               
+                <div  class="btn">
+                    <a href="javascript:void(0)" target="_self" class="button2"><p>描述</p></a>
+                </div></div > 
+                <div class="btn">
+                    <a href="javascript:void(0)" target="_self" class="button2" onclick="queryBySQL()"><p>查询</p></a>
+                </div > 
+                <div class="btn">
+                    <a href="javascript:void(0)" target="_self" class="button2" onclick="clearFeatures()"><p>清除全部</p></a>
+                </div>
+                <div class="btn">
+                    <a href="javascript:void(0)" target="_self" class="button2" onclick="clearFewFeatures()"><p>清除100个</p></a>
+                </div>
+                <div class="btn">
+                    <a href="javascript:void(0)" target="_self" class="button2" onclick="clearSelectedFeatures()"><p>清除选择</p></a>
+                </div>
+                <div class="btn">
+                    <a href="javascript:void(0)" target="_self" class="button2" onclick="switchEdit(this)"><p>启动编辑</p></a>
+                </div>
+                <div class="btn"> <a href="javascript:void(0)" target="_self" class="button2" onclick="showSource()"><p>显示源码</p></a>
+                </div>
+            </div>
+         </div>
+        <div id="all">
+            <div id="button3">
+                    <p id="com_a"></p>
+            </div>
+            <div id="subcontent">
+                <div id="message" >
+                
+                    <ol type="1">
+                        <h4>描述</h4>
+                        <li>定义：对地图的 SQL 查询，通过使用高性能的vector渲染器（canvas2）绘制大量的矢量地物。</li>
+                    </ol>
+                    <ol type="1">
+                        <h4>操作说明</h4>
+                        <li>点击 “查询” 按钮，查询中国1w个县城、所有的市、所有的省会并对其进行绘制</li>
+                        <li>点击 “清除全部” 按钮，清除当前的查询结果。</li>     
+						<li>点击 “清除100个” 按钮，按添加顺序清除前100个查询结果。</li>
+						<li>点击 “清除选择” 按钮，可以删除当前选择的地物。</li>
+						<li>点击 “启动编辑” 按钮，可以启动对地物编辑的功能。</li>
+						<li>点击 “关闭编辑” 按钮，在已经启动编辑功能的前提下，可以关闭编辑功能。</li>
+                    </ol>                                         
+                </div>
+            </div>
+    </div>
+   </div>
+  </body>
+</html>

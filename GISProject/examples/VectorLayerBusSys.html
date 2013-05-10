@@ -1,0 +1,290 @@
+﻿<!DOCTYPE HTML>
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0,  minimum-scale=1.0, user-scalable=0" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <title>VectorLayerBusSys</title>
+    <link rel="stylesheet"  href="./css/style.css" />
+    <script src="./js/jquery-1.7.min.js"></script>
+    <script src="./js/common.js"></script>
+    <script src="../libs/SuperMap.js"></script>
+    <script type="text/javascript">
+        $(document).ready(function () {
+            // 调整子页面布局
+            adjustSubFrame();
+            // 子页面事件响应函数封装
+            clickmessage();
+            // 地图初始化
+            init();
+        });    
+            
+        var car1 = new Image();
+        car1.src = "images/car1.png";
+        var car2 = new Image();
+        car2.src = "images/car2.png";
+        var car3 = new Image();
+        car3.src = "images/car3.png";
+        
+        var map, layer, vectorLayer, features, cars, vectorLayerCars, steps = 10, redraw = false, select, selecedtBus, timerid,
+            //定义公交线路的样式。
+            styleLine = {
+                strokeColor: "black",
+                strokeWidth: 1,
+                fill: false
+            };
+        function init() {
+            map = new SuperMap.Map("map",{controls: [
+                      new SuperMap.Control.LayerSwitcher(),
+                      new SuperMap.Control.ScaleLine(),
+                      new SuperMap.Control.PanZoomBar(),
+                      new SuperMap.Control.Navigation({
+                          dragPanOptions: {
+                              enableKinetic: true
+                          }
+                  })], units: "m"
+            });
+            
+            layer = new SuperMap.Layer.TiledDynamicRESTLayer("changchun", ChangChun_Map, {transparent: true, cacheEnabled: true}, {maxResolution:"auto"}); 
+            layer.events.on({"layerInitialized":addLayer}); 
+            //初始化公交车路线图层。
+            vectorLayer = new SuperMap.Layer.Vector("Vector Layer", {renderers: ["Canvas"],
+                                                                     styleMap: new SuperMap.StyleMap({
+                                                                               "default": styleLine})});
+            //初始化公交车图层。
+            vectorLayerCars = new SuperMap.Layer.Vector("Vector Layer Cars", {renderers: ["Canvas2"]});
+            //为 vectorLayerCars 添加一个选择控件。
+            select = new SuperMap.Control.SelectFeature(vectorLayerCars, {onSelect: onFeatureSelect, onUnselect: onFeatureUnselect});
+            map.addControl(select);
+        }
+
+        //要素被选中时调用此函数
+        function onFeatureSelect(feature) {
+            selecedtBus = feature;
+            //初始化一个弹出窗口，当某个地图要素被选中时会弹出此窗口，用来显示选中地图要素的属性信息
+            popup = new SuperMap.Popup("chicken", 
+                                     selecedtBus.geometry.getBounds().getCenterLonLat(),
+                                     new SuperMap.Size(300,42),
+                                     "<div style='font-size:.8em; opacity: 0.8'><p>公交线路：" + selecedtBus.line.num + "路" + 
+                                     "</p><p>当前位置：" + selecedtBus.geometry.x + "，" + selecedtBus.geometry.y + "</p></div>",
+                                     null, true);
+            selecedtBus.popup = popup;
+            map.addPopup(popup);
+        }
+        
+        //清除要素时调用此函数
+        function onFeatureUnselect(feature) {
+           map.removePopup(feature.popup);
+           feature.popup.destroy();
+           feature.popup = null;
+           selecedtBus = null;
+        }  
+        
+        function addLayer() {
+            map.addLayers([layer, vectorLayer, vectorLayerCars]);            
+            map.setCenter(new SuperMap.LonLat(4503.6240321526, -3861.911472192499), 2);    
+            map.addControl(new SuperMap.Control.MousePosition()) ;            
+            vectorLayerCars.events.register("featuresadded", vectorLayerCars, addFeaturesCompelte);
+            select.activate();
+        }        
+        
+        //定义查询公交线路。
+        function queryBySQL() {
+            vectorLayer.removeAllFeatures();
+            window.clearTimeout(timerid);
+            var queryParam, queryBySQLParams, queryBySQLService;
+            queryParam = new SuperMap.REST.FilterParameter({
+                name: "BusLine@Changchun#1",
+                attributeFilter: "SmID > 0"
+            }),
+            queryBySQLParams = new SuperMap.REST.QueryBySQLParameters({
+                queryParams: [queryParam]
+            }),
+            queryBySQLService = new SuperMap.REST.QueryBySQLService(ChangChun_Map, {
+                eventListeners: {"processCompleted": processCompleted, "processFailed": processFailed}});
+            queryBySQLService.processAsync(queryBySQLParams);
+        }
+        
+        function processCompleted(queryEventArgs) {
+            var i, j, feature,
+                result = queryEventArgs.result;
+            features = [];
+            cars = [];
+            var orientation = 1;
+            if (result && result.recordsets) {
+                for (i=0; i<result.recordsets.length; i++) {
+                    if (result.recordsets[i].features) {
+                        for (j=0; j<result.recordsets[i].features.length; j++) {
+                            feature = result.recordsets[i].features[j];
+                            feature.style = null;
+                            feature.num = j;
+                            features.push(feature);
+                            for(var k = 0, len = feature.geometry.components.length; k < len; k++) {
+                                var car = new SuperMap.Feature.Vector(feature.geometry.components[k].clone());
+                                //定义bus的style。
+                                car.style = {pointRadius: 10, stroke: false};
+                                var cargeometry = car.geometry;
+                                //模拟bus的基本信息。
+                                car.line = feature;
+                                car.orientation = orientation; 
+                                car.currentIndex = k;
+                                if(feature.geometry.components[car.currentIndex + car.orientation]) {
+                                    car.nextPoint = feature.geometry.components[k + car.orientation];                                
+                                    var dx = car.nextPoint.x - cargeometry.x;
+                                    var dy = car.nextPoint.y - cargeometry.y;
+                                    var distance = Math.sqrt(dx * dx + dy * dy);
+                                    car.speed = parseInt(Math.random() * 5 + 2) * car.orientation;
+                                    if(car.speed == 0) {car.speed == 10};
+                                    car.moves = distance / car.speed;
+                                    car.vx = dx / car.moves;
+                                    car.vy = dy / car.moves;
+                                    var angle = Math.atan2(dx, dy);
+                                    car.style.rotate = angle;
+                                    //分配不同的car图片。
+                                    if (Math.abs(car.speed < 4)){
+                                        car.style.externalGraphicSource = car1;
+                                    }
+                                    if (Math.abs(car.speed) >= 4 && Math.abs(car.speed < 5)){
+                                        car.style.externalGraphicSource = car2;
+                                    }
+                                    if (Math.abs(car.speed >= 5)){
+                                        car.style.externalGraphicSource = car3;
+                                    }
+                                    car.stop = false;
+                                }else{
+                                    car.stop = true;
+                                    car.style.externalGraphicSource = car3;
+                                }
+                                orientation *= -1;
+                                cars.push(car);
+                            }
+                        }
+                    }
+                }
+            }
+            vectorLayer.addFeatures(features);
+            vectorLayerCars.addFeatures(cars);
+        }
+        
+        function processFailed(e) {
+            alert(e.error.errorMsg);
+        }
+        
+        function monitor() {
+            document.getElementById("monitor").onclick = "";
+            if(selecedtBus) {
+                map.removePopup(selecedtBus.popup);
+            }
+            vectorLayerCars.removeAllFeatures();
+            redraw = false;
+            for(var i =0, len = cars.length; i < len; i++) {
+                var car = cars[i];
+                var cargeometry = car.geometry;
+                if(!car.stop) {
+                    if(car.moves < 1) {
+                        cargeometry.x = car.nextPoint.x;
+                        cargeometry.y = car.nextPoint.y;
+                        //定义car的信息。
+                        var feature = car.line;                            
+                        car.currentIndex += car.orientation;
+                        if(feature.geometry.components[car.currentIndex + car.orientation]) {
+                            car.nextPoint = feature.geometry.components[car.currentIndex + car.orientation];                                
+                            var dx = car.nextPoint.x - cargeometry.x;
+                            var dy = car.nextPoint.y - cargeometry.y;
+                            var distance = Math.sqrt(dx * dx + dy * dy);
+                            car.moves = Math.abs(distance / car.speed);
+                            car.vx = dx / car.moves;
+                            car.vy = dy / car.moves;
+                            var angle = Math.atan2(dx, dy);
+                            car.style.rotate = angle;
+                        }else{
+                            car.stop = true;
+                            car.style.fillColor = "rgb(150,150,150)";
+                        }
+                    }else{
+                        cargeometry.x += car.vx;
+                        cargeometry.y += car.vy;
+                        car.moves--;
+                    }
+                }
+                //只要有车移动就需要重绘。
+                if(!car.stop) {
+                    redraw = true;
+                }
+            }
+            vectorLayerCars.addFeatures(cars);
+            if(selecedtBus) {
+                vectorLayerCars.selectedFeatures.push(selecedtBus);
+                popup = new SuperMap.Popup("chicken", 
+                                         selecedtBus.geometry.getBounds().getCenterLonLat(),
+                                         new SuperMap.Size(300,42),
+                                         "<div style='font-size:.8em; opacity: 0.8'><p>公交线路：" + selecedtBus.line.num + "路" + 
+                                         "</p><p>当前位置：" + selecedtBus.geometry.x + "，" + selecedtBus.geometry.y + "</p></div>",
+                                         null, true);
+                selecedtBus.popup = popup;
+                map.addPopup(popup);
+            }
+        }
+        
+        //在这个函数里定义重绘，保证每一个都已经被绘制。
+        function addFeaturesCompelte(args) {
+            if(redraw) {
+                timerid = setTimeout(monitor, 50);
+            }
+        }
+        
+        //停止监控
+        function stopMonitor() {
+            window.clearTimeout(timerid);
+            document.getElementById("monitor").onclick = monitor;
+            redraw = false;
+        }
+    </script>
+  </head>
+  <body >
+    <div id="core" >
+        <div id="map" >             
+        </div>
+        <div id="description">
+            <div>
+               <div id="nav" >
+                <a href="javascript:void(0)" target="_self" class="add-big" ></a>
+               
+                <div  class="btn">
+                    <a href="javascript:void(0)" target="_self" class="button2"><p>描述</p></a>
+                </div>
+                </div > 
+                <div class="btn">
+                    <a href="javascript:void(0)" target="_self" class="button2" onclick="queryBySQL()"><p>查询车辆</p></a>
+                </div > 
+                <div class="btn">
+                    <a href="javascript:void(0)" target="_self" class="button2" id="monitor" onclick="monitor()"><p>开始监控</p></a>
+                </div>
+                <div class="btn">
+                    <a href="javascript:void(0)" target="_self" class="button2" onclick="stopMonitor()"><p>停止监控</p></a>
+                </div>
+                </div>
+                <div class="btn"> <a href="javascript:void(0)" target="_self" class="button2" onclick="showSource()"><p>显示源码</p></a>
+                </div>
+        </div>
+        <div id="all">
+            <div id="button3">
+                    <p id="com_a"></p>
+            </div>
+            <div id="subcontent">
+                <div id="message" >
+                
+                    <ol type="1">
+                        <h4>描述</h4>
+                        <li>定义：对地图的 SQL 查询，显示长春市的公交路线图，并模拟公交车的运行状态，点的颜色代表车速。</li>
+                    </ol>
+                    <ol type="1">
+                        <h4>操作说明</h4>
+                        <li>点击 "查询车辆" 按钮，执行 SQL 查询，地图上显示满足SQL条件的车辆</li>
+                        <li>点击 "更新车辆" 按钮，实时在线更新车辆，开始监控。</li>             
+                    </ol>                                         
+                </div>
+            </div>
+        </div>
+   </div>
+  </body>
+</html>

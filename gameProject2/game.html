@@ -1,0 +1,20 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0,  minimum-scale=1.0, user-scalable=0" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+	<script src="../libs/jquery-1.6.4.min.js"></script>
+	<script src = "../libs/CanvasSketch.js"></script>
+	<script src = "./src/Defence.js"></script>
+	<script type = "text/javascript">
+		window.addEventListener("load", canvasApp, true);
+		function canvasApp(){
+			var div = document.getElementById("canvas");
+			var defence = new Defence.Main(div);
+		}
+	</script>
+</head>
+<body>
+<div style="position:relative; left:0px; top:0px; width: 600px; height: 600px" id="canvas"></div>
+</body>
+</html>

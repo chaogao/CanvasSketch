@@ -1,0 +1,134 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+<script src = "../CanvasSketch.js"></script>
+<script type = "text/javascript">
+    var layer, threeD;
+    var circleStyle = {fillColor:"blue", fill:true, stroke:true, fillOpacity:1, strokeOpacity:1};
+    var linerRingStyle = {fillColor:"blue", fill:true, stroke:true, fillOpacity:0.1, strokeOpacity:1};
+    var groundStyle = {fillColor:"#cc6633", fill:true, stroke:true, fillOpacity:0.1, strokeOpacity:1};
+    var starStyle = {fillColor:"yellow", fill:true, stroke:true, fillOpacity:0.4, strokeOpacity:1};
+    var outLineStyle = {fillColor:"#f4fffc", fill:true, stroke:true, fillOpacity:0.2, strokeOpacity:1};
+    var imgStyle = {fill:true, stroke:true, fillOpacity:1, strokeOpacity:1};
+    window.addEventListener("load", init2, true);
+    function init2() {            
+        var div = document.getElementById("renderer2");
+        threeD = new ThreeD(0);
+        div.innerHTML = "";
+        layer = new Layer(div, threeD); 
+        //添加地面。
+		addGround();
+		
+		addPoint();
+		//addCircle();
+		//addBox();
+		//addImage();
+		//addStar();
+    }
+    
+	//添加图片。
+    function addImage() {
+        var vectors = [];
+        var img = new Img(new Point((Math.random()*300-150), (Math.random()*300-150)), "../imgs/plane.png");
+        vectors.push(new Vector(img, imgStyle));
+        layer.addVectors(vectors);
+    }
+    
+	//添加点。
+    function addPoint() {
+		var vectors = [];
+		for(var i = 0; i<1; i++) {
+			var point = new Point(Math.random()*300-150, Math.random()*300-150);
+			vectors.push(new Vector(point));
+		}
+		layer.addVectors(vectors);
+    }
+    
+	//添加圆
+    function addCircle() {
+        var vectors = [];
+        var circle = new Circle(Math.random()*300-150, Math.random()*300-150, Math.random()*10 + 5);
+        var vector = new Vector(circle, circleStyle);
+        vectors.push(vector);
+        
+        layer.addVectors(vectors);
+    }
+    
+	//添加二维线
+    function addLine() {
+        var vectors = [];
+        var points = [];
+        for(var i = 0; i < 3; i++) {
+            var point = new Point((Math.random()*300-200), (Math.random()*300-150));
+            points.push(point);
+        }
+        var line = new Vector(new Line(points));
+        vectors.push(line);
+        
+        layer.addVectors(vectors);
+    }
+    
+	//添加地面。
+    function addGround() {
+        var vectors = [];
+        var points = [];
+        points.push(new Point(-150, -150), new Point(-150, 150), new Point(150, 150), new Point(150, -150));
+        var linerRing = new Vector(new LinerRing(points), groundStyle);
+        vectors.push(linerRing);
+        
+        layer.addVectors(vectors);
+    }
+    
+	//添加三维矩形。
+    function addBox() {
+        var vectors = [];
+        var points = [];
+        //三维属性
+        var threeD = new ThreeD(Math.random()*10 + 5);
+        leftBottom = new Point((Math.random()*300-150), (Math.random()*300-150));
+        points.push(leftBottom, new Point(leftBottom.x + 20, leftBottom.y), 
+            new Point(leftBottom.x + 20, leftBottom.y + 20), 
+            new Point(leftBottom.x, leftBottom.y + 20));
+        var linerRing = new Vector(new LinerRing(points, threeD), linerRingStyle);
+        vectors.push(linerRing);
+        
+        layer.addVectors(vectors);
+    }
+
+	//添加三维五角星。
+    function addStar() {
+        var vectors = [];
+        //三维属性
+		var threeD = new ThreeD(Math.random()*5 + 2);
+        var point = new Point((Math.random()*300-150), (Math.random()*300-150));
+        var star = new Vector(new Star(point, 10, threeD), starStyle);
+        vectors.push(star);
+        
+        layer.addVectors(vectors);
+    }
+	
+	//切换2D显示。
+	function changetwoD() {
+		layer.threeD = null;
+		layer.reDraw();
+	}
+	
+	//切换3D显示。
+	function changethreeD() {
+		layer.threeD = threeD;
+		layer.reDraw();
+	}
+</script>
+</head>
+<body>
+<div  style="width:400px; height:400px; border:1px solid black" id="renderer2">&nbsp;</div>
+<button type="button" onclick="addBox()">添加3D矩形</button>
+<button type="button" onclick="addStar()">添加3D五角星</button>
+<button type="button" onclick="addPoint()">添加2D点</button>
+<button type="button" onclick="addCircle()">添加2D圆</button>
+<button type="button" onclick="addLine()">添加2D线</button>
+<br />
+<button type="button" onclick="changetwoD()">切换二维</button>
+<button type="button" onclick="changethreeD()">切换三维</button>
+</body>
+</html>

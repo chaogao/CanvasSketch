@@ -1,0 +1,105 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+<script src = "../libs/CanvasSketch.js"></script>
+<script type = "text/javascript">
+    var layer;
+    var circleStyle = {fillColor:"blue", fill:true, stroke:true, fillOpacity:1, strokeOpacity:1};
+    var starStyle = {fillColor:"yellow", fill:true, stroke:true, fillOpacity:0.4, strokeOpacity:1};
+	var imgStyle = {fill:true, stroke:true, fillOpacity:1, strokeOpacity:1};
+    window.addEventListener("load", init2, true);
+    function init2() {            
+        var div = document.getElementById("renderer2");
+        div.innerHTML = "";
+        layer = new Layer(div);
+        for(var i=0; i<2; i++) {
+            addPoint();
+        }
+        for(var i=0; i<2; i++) {
+            addCircle();
+        }
+        for(var i=0; i<2; i++) {
+            addLine();
+        }
+        for(var i=0; i<2; i++) {
+            addLinerString();
+        }
+		addImage();
+    }    
+	
+	function addImage() {
+        var vectors = [];
+        var img = new Img(new Point((Math.random()*400), (Math.random()*300)), "../imgs/plane.png", new CanvasSketch.Size(100,100));
+        vectors.push(new Vector(img, imgStyle));
+        layer.addVectors(vectors);
+    }
+    
+    function addPoint() {
+        var vectors = [];
+        var point = new Point(300, 200);
+        vectors.push(new Vector(point));
+        layer.addVectors(vectors);
+    }
+    
+    function addCircle() {
+        var vectors = [];
+        var circle = new Circle(300, 200, Math.random()*10 + 5);
+        var vector = new Vector(circle, circleStyle);
+        vectors.push(vector);
+        layer.addVectors(vectors);
+    }
+    
+    function addLine() {
+        var vectors = [];
+        var points = [];
+        for(var i = 0; i < 3; i++) {
+            var point = new Point((Math.random()*400), (Math.random()*300));
+            points.push(point);
+        }
+        var line = new Vector(new Line(points));
+        vectors.push(line);
+        layer.addVectors(vectors);
+    }
+    
+    function addLinerString() {
+        var vectors = [];
+        var points = [];
+        for(var i = 0; i < 3; i++) {
+            var point = new Point((Math.random()*400), (Math.random()*300));
+            points.push(point);
+        }
+        var linerRing = new Vector(new LinerRing(points));
+        vectors.push(linerRing);
+        layer.addVectors(vectors);
+    }
+    
+    function addStar() {
+        var vectors = [];
+        var point = new Point((Math.random()*400), (Math.random()*300));
+        var star = new Star(point, Math.random()*10 +10);
+        vectors.push(new Vector(star, starStyle));
+        layer.addVectors(vectors);
+    }
+    
+    function zoomin() {
+        var zoom = layer.zoom + 20;
+        layer.moveTo(zoom, layer.center);
+    }
+    
+    function zoomout() {
+        var zoom = layer.zoom - 20;
+        layer.moveTo(zoom, layer.center);
+    }
+</script>
+</head>
+<body>
+<div  style="width:600px; height:400px; border:1px solid black" id="renderer2">&nbsp;</div>
+<button type="button" onclick="addPoint()">添加点</button>
+<button type="button" onclick="addCircle()">添加圆</button>
+<button type="button" onclick="addLine()">添加线</button>
+<button type="button" onclick="addLinerString()">添加面</button>
+<button type="button" onclick="addStar()">添五角星</button>
+<button type="button" onclick="zoomin()">放大</button>
+<button type="button" onclick="zoomout()">缩小</button>
+</body>
+</html>

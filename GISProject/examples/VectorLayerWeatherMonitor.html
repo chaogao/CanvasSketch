@@ -1,0 +1,314 @@
+﻿<!DOCTYPE HTML>
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0,  minimum-scale=1.0, user-scalable=0" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <title>VectorLayerWeatherMonitor</title>
+    <link rel="stylesheet"  href="./css/style.css" />
+    <script src="./js/jquery-1.7.min.js"></script>
+    <script src="./js/common.js"></script>
+    <script src="../libs/SuperMap.js"></script>
+    <script src="./data/sampleData_1.js"></script>
+    <script src="./data/sampleData_2.js"></script>
+    <script src="./data/sampleData_3.js"></script>
+    <script src="./data/sampleData_4.js"></script>
+    <script src="./data/sampleData_5.js"></script>
+    <script src="./data/sampleData_6.js"></script>
+    <script src="./data/sampleData_7.js"></script>
+    <script src="./data/sampleData_8.js"></script>
+    <script type="text/javascript">
+        $(document).ready(function () {
+            // 调整子页面布局
+            adjustSubFrame();
+            // 子页面事件响应函数封装
+            clickmessage();
+            // 地图初始化
+            init();
+        });
+        var map, layer, vectorLayer, features, select, tempLayer , drag, delIndex = 0, editEnable = false, dataIndex = 0, timerID = null,
+            weatherDatas = [], 
+            //设置图层样式
+            transformControl;
+            style = {
+                strokeColor: "#cccccc",
+                strokeWidth: 1,
+                fillColor: "#ccfffa",
+                fillOpacity: "0.5"
+            };
+            style2 = {
+                strokeColor: "#cccccc",
+                strokeWidth: 1,
+                fillColor: "#a3f8b4",
+                fillOpacity: "0.5"
+            };
+            style1 = {
+                strokeColor: "#cccccc",
+                strokeWidth: 1,
+                fillColor: "#79f26f",
+                fillOpacity: "0.5"
+            };
+            style3 = {
+                strokeColor: "#cccccc",
+                strokeWidth: 1,
+                fillColor: "#2dd90b",
+                fillOpacity: "0.5"
+            };
+            style4 = {
+                strokeColor: "#cccccc",
+                strokeWidth: 1,
+                fillColor: "#8aee1e",
+                fillOpacity: "0.5"
+            };
+            style6 = {
+                strokeColor: "#cccccc",
+                strokeWidth: 1,
+                fillColor: "#c5ef0f",
+                fillOpacity: "0.5"
+            };
+            style5 = {
+                strokeColor: "#cccccc",
+                strokeWidth: 1,
+                fillColor: "#fff100",
+                fillOpacity: "0.5"
+            };
+            style7 = {
+                strokeColor: "#cccccc",
+                strokeWidth: 1,
+                fillColor: "#fcbd10",
+                fillOpacity: "0.5"
+            };
+            style8 = {
+                strokeColor: "#cccccc",
+                strokeWidth: 1,
+                fillColor: "#fb8722",
+                fillOpacity: "0.5"
+            };
+            style9 = {
+                strokeColor: "#cccccc",
+                strokeWidth: 1,
+                fillColor: "#d53b3b",
+                fillOpacity: "1"
+            };
+
+        //定义初始化函数
+        function init() {
+            //加载map控件
+            map = new SuperMap.Map("map",{controls: [
+                      new SuperMap.Control.LayerSwitcher(),
+                      new SuperMap.Control.ScaleLine(),
+                      new SuperMap.Control.PanZoomBar(),
+                      new SuperMap.Control.Navigation({
+                          dragPanOptions: {
+                              enableKinetic: true
+                          }
+                  })], units: "m"
+            });
+            //初始化图层
+            layer = new SuperMap.Layer.TiledDynamicRESTLayer("China400", World, {transparent: true, cacheEnabled: true}, {maxResolution:"auto"}); 
+            //初始化Vector图层
+            vectorLayer = new SuperMap.Layer.Vector("Vector Layer", {renderers: ["Canvas2"]});
+            layer.events.on({"layerInitialized":addLayer});
+            //初始化数据
+            weatherDatas[0] = SuperMap.REST.Recordset.fromJson(sampleData1);
+            weatherDatas[1] = SuperMap.REST.Recordset.fromJson(sampleData2);
+            weatherDatas[2] = SuperMap.REST.Recordset.fromJson(sampleData3);
+            weatherDatas[3] = SuperMap.REST.Recordset.fromJson(sampleData4);
+            weatherDatas[4] = SuperMap.REST.Recordset.fromJson(sampleData5);
+            weatherDatas[5] = SuperMap.REST.Recordset.fromJson(sampleData6);
+            weatherDatas[6] = SuperMap.REST.Recordset.fromJson(sampleData7);
+            weatherDatas[7] = SuperMap.REST.Recordset.fromJson(sampleData8);
+        };
+        
+        //编辑选择的要素
+        function editSelectedFeatures() {
+            if(vectorLayer.selectedFeatures.length == 1) {
+                var feature = vectorLayer.selectedFeatures[0];
+                //先删除popup。
+                if(feature.popup) {
+                    map.removePopup(feature.popup);
+                    feature.popup.destroy();
+                    feature.popup = null;
+                }
+                tempLayer =new SuperMap.Layer.Vector("tempEdit", {renderers: ["SVG"]});
+                map.addLayer(tempLayer);
+                var cloneFeature = feature.clone();
+                switch (cloneFeature.style.name) {
+                    case "town":
+                        cloneFeature.style = {
+                            externalGraphic: "./images/marker_select.png",
+                            graphicWidth: 13,
+                            graphicHeight: 16,
+                            name: "town"
+                        }
+                        break;
+                    case "city":
+                        cloneFeature.style = {
+                            pointRadius: 10,
+                            externalGraphic: "./images/markerbig_select.png",
+                            name: "city"
+                        };
+                        break;
+                    case "captial":
+                        cloneFeature.style = {
+                            pointRadius: 15,
+                            externalGraphic: "./images/markerflag_select.png",
+                            name: "captial"
+                        };
+                        break;
+                }
+                tempLayer.addFeatures(cloneFeature);
+                //删除以前的feature
+                vectorLayer.removeFeatures(feature);
+                
+                drag = new SuperMap.Control.DragFeature(tempLayer);
+                map.addControl(drag);
+                drag.activate();
+                
+                drag.onComplete = function(feature, pixel) {
+                    switch (feature.style.name) {
+                        case "town":
+                            feature.style = style;
+                            break;
+                        case "city":
+                            cloneFeature.style = styleCity;
+                            break;
+                        case "captial":
+                            cloneFeature.style = styleCaptial;
+                            break;
+                    }
+                    vectorLayer.addFeatures(feature);
+                    map.removeLayer(tempLayer);
+                    tempLayer.destroy();
+                    drag.outFeature(feature);
+                    drag.deactivate();
+                }
+            }else {
+                alert("请选择一个feature")
+            }
+        };
+        
+        
+        //添加图层
+        function addLayer() {
+            map.addLayers([layer,vectorLayer]);            
+            map.setCenter(new SuperMap.LonLat(106, 34), 2);  
+            map.addControl(new SuperMap.Control.MousePosition()) ;            
+        };      
+
+        
+        //添加数据
+        function monitor() {
+            vectorLayer.removeAllFeatures();
+            var i, len, feature, features = [],result;
+            
+            if(dataIndex > 7){
+                dataIndex = 0;
+            }
+            result = weatherDatas[dataIndex];
+            dataIndex++;
+            
+            if (result && result.features) {
+                var len = result.features.length;
+                for (i = 0; i < len; i++) {
+                    feature = result.features[i];
+                    var data = feature.attributes;
+                    var index = data.fieldNames.indexOf("DMAXVALUE");
+                    var value = data.fieldValues[index]
+                    if( value < -24){
+                        feature.style = style;
+                    }
+                    else if( value < -18){
+                        feature.style = style1;
+                    }
+                    else if( value < -12){
+                        feature.style = style2;
+                    }
+                    else if( value < -6){
+                        feature.style = style3;
+                    }
+                    else if( value < 0){
+                        feature.style = style4;
+                    }
+                    else if( value < 6){
+                        feature.style = style5;
+                    }
+                    else if( value < 12){
+                        feature.style = style6;
+                    }
+                    else if( value < 18){
+                        feature.style = style7;
+                    }
+                    else if( value < 24){
+                        feature.style = style8;
+                    }
+                    else {
+                        features.style = style9;
+                    }
+                    features.push(feature);
+                }
+            }
+            vectorLayer.addFeatures(features);
+            if(timerID){
+                window.clearTimeout(timerID);
+                timerID = null;
+            }
+            timerID = window.setTimeout(monitor,1000);
+        };
+
+        //清除全部要素
+        function clearFeatures() {
+            /**&if(vectorLayer.selectedFeatures.length > 0) {
+                map.removePopup(vectorLayer.selectedFeatures[0].popup);
+            }*/
+            if(timerID){
+                window.clearTimeout(timerID);
+                timerID = null;
+            }
+            vectorLayer.removeAllFeatures();
+        };
+    </script>
+  </head>
+  <body >
+    <div id="core" >
+        <div id="map" >             
+        </div>
+        <div id="description">
+            <div>
+               <div id="nav" >
+                <a href="javascript:void(0)" target="_self" class="add-big" ></a>
+               
+                <div  class="btn">
+                    <a href="javascript:void(0)" target="_self" class="button2"><p>描述</p></a>
+                </div></div > 
+                <div class="btn">
+                    <a href="javascript:void(0)" target="_self" class="button2" onclick="monitor()"><p>开始监听</p></a>
+                </div > 
+                <div class="btn">
+                    <a href="javascript:void(0)" target="_self" class="button2" onclick="clearFeatures()"><p>清除全部</p></a>
+                </div>
+                <div class="btn"> <a href="javascript:void(0)" target="_self" class="button2" onclick="showSource()"><p>显示源码</p></a>
+                </div>
+            </div>
+         </div>
+        <div id="all">
+            <div id="button3">
+                    <p id="com_a"></p>
+            </div>
+            <div id="subcontent">
+                <div id="message" >
+                
+                    <ol type="1">
+                        <h4>描述</h4>
+                        <li>定义：获取气象温度分布等值面信息（模拟使用存放在本地的数据），通过矢量渲染在客户端直接动态显示，实现实时监听。</li>
+                    </ol>
+                    <ol type="1">
+                        <h4>操作说明</h4>
+                        <li>点击 “开始监听” 按钮，获取某一天间隔三小时的全国温度信息，循环渲染显示在地图上以供监听</li>
+                        <li>点击 “清除全部” 按钮，则停止监听，并清除所有渲染信息</li>     
+                    </ol>                                         
+                </div>
+            </div>
+    </div>
+   </div>
+  </body>
+</html>
